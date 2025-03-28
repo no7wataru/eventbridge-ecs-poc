@@ -8,6 +8,7 @@ import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as ecr_assets from 'aws-cdk-lib/aws-ecr-assets';
 import * as pipes from 'aws-cdk-lib/aws-pipes';
 import * as iam from 'aws-cdk-lib/aws-iam';
+import * as logs from 'aws-cdk-lib/aws-logs';
 import * as path from 'path';
 
 export class EventbridgeEcsPocStack extends cdk.Stack {
@@ -25,9 +26,13 @@ export class EventbridgeEcsPocStack extends cdk.Stack {
 
     // 3. Docker イメージのビルドと ECR 登録
     // app ディレクトリに Dockerfile, index.js などがある前提
-    const imageAsset = new ecr_assets.DockerImageAsset(this, 'FileProcessorImage', {
-      directory: path.join(__dirname, '../app'),
-    });
+    const imageAsset = new ecr_assets.DockerImageAsset(
+      this,
+      'FileProcessorImage',
+      {
+        directory: path.join(__dirname, '../app'),
+      }
+    );
 
     // 4. 2 種類の Fargate タスク定義の作成（どちらも最小リソース: cpu=256, memory=512）
     // タスク定義 A（TASK_TYPE='A'）
@@ -57,13 +62,18 @@ export class EventbridgeEcsPocStack extends cdk.Stack {
       cluster,
       taskDefinition: taskDefinitionA,
       launchTarget: new tasks.EcsFargateLaunchTarget(),
-      containerOverrides: [{
-        containerDefinition: containerA,
-        environment: [
-          { name: 'S3_FILE_PATH', value: sfn.JsonPath.stringAt('$.s3FilePath') },
-          { name: 'TASK_TYPE', value: 'A' },
-        ],
-      }],
+      containerOverrides: [
+        {
+          containerDefinition: containerA,
+          environment: [
+            {
+              name: 'S3_FILE_PATH',
+              value: sfn.JsonPath.stringAt('$.s3FilePath'),
+            },
+            { name: 'TASK_TYPE', value: 'A' },
+          ],
+        },
+      ],
       taskTimeout: sfn.Timeout.duration(cdk.Duration.minutes(30)),
     });
     runTaskA.addRetry({ maxAttempts: 3, interval: cdk.Duration.seconds(5) });
@@ -74,13 +84,18 @@ export class EventbridgeEcsPocStack extends cdk.Stack {
       cluster,
       taskDefinition: taskDefinitionB,
       launchTarget: new tasks.EcsFargateLaunchTarget(),
-      containerOverrides: [{
-        containerDefinition: containerB,
-        environment: [
-          { name: 'S3_FILE_PATH', value: sfn.JsonPath.stringAt('$.s3FilePath') },
-          { name: 'TASK_TYPE', value: 'B' },
-        ],
-      }],
+      containerOverrides: [
+        {
+          containerDefinition: containerB,
+          environment: [
+            {
+              name: 'S3_FILE_PATH',
+              value: sfn.JsonPath.stringAt('$.s3FilePath'),
+            },
+            { name: 'TASK_TYPE', value: 'B' },
+          ],
+        },
+      ],
       taskTimeout: sfn.Timeout.duration(cdk.Duration.minutes(30)),
     });
     runTaskB.addRetry({ maxAttempts: 3, interval: cdk.Duration.seconds(5) });
@@ -103,39 +118,51 @@ export class EventbridgeEcsPocStack extends cdk.Stack {
       assumedBy: new iam.ServicePrincipal('pipes.amazonaws.com'),
     });
     // SQS からの読み出し権限
-    pipeRole.addToPolicy(new iam.PolicyStatement({
-      actions: ['sqs:ReceiveMessage', 'sqs:DeleteMessage', 'sqs:GetQueueAttributes'],
-      resources: [queue.queueArn],
-    }));
+    pipeRole.addToPolicy(
+      new iam.PolicyStatement({
+        actions: [
+          'sqs:ReceiveMessage',
+          'sqs:DeleteMessage',
+          'sqs:GetQueueAttributes',
+        ],
+        resources: [queue.queueArn],
+      })
+    );
     // Step Functions の起動権限
-    pipeRole.addToPolicy(new iam.PolicyStatement({
-      actions: ['states:StartExecution'],
-      resources: [stateMachine.stateMachineArn],
-    }));
+    pipeRole.addToPolicy(
+      new iam.PolicyStatement({
+        actions: ['states:StartExecution'],
+        resources: [stateMachine.stateMachineArn],
+      })
+    );
+
+    const pipeLogGroup = new logs.LogGroup(this, 'PipeLogGroup', {
+      retention: logs.RetentionDays.ONE_WEEK,
+    });
 
     // 8. EventBridge Pipes の作成
     // inputTemplate で、SQS の本文と Message Attributes から必要情報を抽出して、State Machine の入力に渡す
     new pipes.CfnPipe(this, 'SqsToStateMachinePipe', {
       roleArn: pipeRole.roleArn,
       source: queue.queueArn,
-      target: stateMachine.stateMachineArn,
-      // inputTemplate: JSON.stringify({
-      //   "s3FilePath": "<$.body.s3FilePath>",
-      //   "taskType": "<$.messageAttributes.taskType.stringValue>"
-      // }),
-      targetParameters: {
-        stepFunctionStateMachineParameters: {
-          InputTemplate: JSON.stringify({
-            "s3FilePath": "<$.body.s3FilePath>",
-            "taskType": "<$.messageAttributes.taskType.stringValue>"
-          })
-        }
-      },
       sourceParameters: {
         sqsQueueParameters: {
           batchSize: 1,
-        }
-      }
+        },
+      },
+      target: stateMachine.stateMachineArn,
+      targetParameters: {
+        inputTemplate: JSON.stringify({
+          s3FilePath: '<$.body.s3FilePath>',
+          taskType: '<$.messageAttributes.taskType.stringValue>',
+        }),
+      },
+      logConfiguration: {
+        cloudwatchLogsLogDestination: {
+          logGroupArn: pipeLogGroup.logGroupArn,
+        },
+        level: 'ERROR',
+      },
     });
   }
 }
