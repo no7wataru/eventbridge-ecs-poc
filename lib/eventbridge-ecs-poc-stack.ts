@@ -77,7 +77,7 @@ export class EventbridgeEcsPocStack extends cdk.Stack {
           environment: [
             {
               name: 'S3_FILE_PATH',
-              value: sfn.JsonPath.stringAt('$.s3FilePath'),
+              value: sfn.JsonPath.stringAt('$[0].s3FilePath'),
             },
             { name: 'TASK_TYPE', value: 'A' },
           ],
@@ -99,7 +99,7 @@ export class EventbridgeEcsPocStack extends cdk.Stack {
           environment: [
             {
               name: 'S3_FILE_PATH',
-              value: sfn.JsonPath.stringAt('$.s3FilePath'),
+              value: sfn.JsonPath.stringAt('$[0].s3FilePath'),
             },
             { name: 'TASK_TYPE', value: 'B' },
           ],
@@ -111,8 +111,8 @@ export class EventbridgeEcsPocStack extends cdk.Stack {
 
     // Choice ステートで ECS タスクを分岐（入力の taskType による選択）
     const choice = new sfn.Choice(this, 'ChooseTaskDefinition');
-    choice.when(sfn.Condition.stringEquals('$.taskType', 'A'), runTaskA);
-    choice.when(sfn.Condition.stringEquals('$.taskType', 'B'), runTaskB);
+    choice.when(sfn.Condition.stringEquals('$[0].taskType', 'A'), runTaskA);
+    choice.when(sfn.Condition.stringEquals('$[0].taskType', 'B'), runTaskB);
     // デフォルトは TASK_TYPE "A" とする
     choice.otherwise(runTaskA);
 
