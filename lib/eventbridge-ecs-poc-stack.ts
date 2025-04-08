@@ -15,9 +15,18 @@ export class EventbridgeEcsPocStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
+    // Dead Letter Queue の作成
+    const deadLetterQueue = new sqs.Queue(this, 'DeadLetterQueue', {
+      retentionPeriod: cdk.Duration.days(14), // 必要に応じて保持期間を調整
+    });
+
     // 1. SQS キューの作成
     const queue = new sqs.Queue(this, 'ProcessingQueue', {
       visibilityTimeout: cdk.Duration.seconds(90),
+      deadLetterQueue: {
+        queue: deadLetterQueue,
+        maxReceiveCount: 3, // 受信回数が3回を超えると DLQ にメッセージが移動
+      },
     });
 
     // 2. VPC と ECS クラスターの作成
