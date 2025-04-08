@@ -161,6 +161,9 @@ export class EventbridgeEcsPocStack extends cdk.Stack {
       },
       target: stateMachine.stateMachineArn,
       targetParameters: {
+        stepFunctionStateMachineParameters: {
+          invocationType: 'FIRE_AND_FORGET',
+        },
         inputTemplate: JSON.stringify({
           s3FilePath: '<$.body.s3FilePath>',
           taskType: '<$.messageAttributes.taskType.stringValue>',
