@@ -140,7 +140,7 @@ export class EventbridgeEcsPocStack extends cdk.Stack {
     // Step Functions の起動権限
     pipeRole.addToPolicy(
       new iam.PolicyStatement({
-        actions: ['states:StartExecution'],
+        actions: ['states:StartExecution', 'states:StartSyncExecution'],
         resources: [stateMachine.stateMachineArn],
       })
     );
