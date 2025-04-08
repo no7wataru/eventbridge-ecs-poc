@@ -40,6 +40,7 @@ export class EventbridgeEcsPocStack extends cdk.Stack {
       'FileProcessorImage',
       {
         directory: path.join(__dirname, '../app'),
+        platform: ecr_assets.Platform.LINUX_AMD64,
       }
     );
 
