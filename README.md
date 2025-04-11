@@ -81,3 +81,19 @@ flowchart LR
    - EVENTBRIDGE PIPESのエラーログは専用のLOG GROUPに保存（1週間保持）
 
 このアーキテクチャにより、メッセージキューイング、非同期実行、エラーハンドリング、ログ管理を備えたスケーラブルな処理基盤が実現されています。
+
+
+```mermaid
+architecture-beta
+    service sqs(logos:aws-sqs)[SQS]
+    service ebp(logos:aws-eventbridge)[EventBridge Pipes]
+    service sf(logos:aws-step-functions)[Step Functions]
+    junction jct
+    service ft1(logos:aws-fargate)[Fargate Task 1]
+    service ft2(logos:aws-fargate)[Fargate Task 2]
+    sqs:R --> L:ebp
+    ebp:R --> L:sf
+    sf:R -- L:jct
+    jct:T --> B:ft1
+    jct:B --> T:ft2
+```
