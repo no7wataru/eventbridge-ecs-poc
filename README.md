@@ -29,8 +29,6 @@ aws sqs send-message \
 flowchart LR
     subgraph "メッセージング"
         SQS["SQS Queue<br>(ProcessingQueue)"]
-        DLQ["Dead Letter Queue<br>(max retry: 3)"]
-        SQS --> DLQ
     end
 
     subgraph "オーケストレーション"
@@ -44,19 +42,11 @@ flowchart LR
         TASK_B["ECS Fargate Task B<br>(cpu:256, mem:512)"]
     end
 
-    subgraph "ログ・モニタリング"
-        LOGS["CloudWatch Logs"]
-        PIPE_LOGS["Pipe Log Group<br>(retention: 1 week)"]
-    end
-
     SQS --> PIPE
     PIPE --> |"StartExecution<br>(FIRE_AND_FORGET)"| SFN
     SFN --> CHOICE
     CHOICE --> |"taskType = 'A'"| TASK_A
     CHOICE --> |"taskType = 'B'"| TASK_B
-    TASK_A --> LOGS
-    TASK_B --> LOGS
-    PIPE --> PIPE_LOGS
 
     classDef aws fill:#FF9900,stroke:#232F3E,color:#232F3E;
     class SQS,DLQ,PIPE,SFN,TASK_A,TASK_B,LOGS,PIPE_LOGS aws;
